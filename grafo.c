@@ -27,11 +27,11 @@ struct grafo {
     char *nome;
 
     vertice *lista_de_vertices;
-    int n_vertices;
-    int n_arestas;
+    unsigned int n_vertices;
+    unsigned int n_arestas;
 };
 
-vertice *cria_vertice(char *nome) {
+static vertice *cria_vertice(char *nome) {
     vertice *v = (vertice *) malloc(sizeof(vertice));
     if (v == NULL) 
         return NULL;
@@ -49,7 +49,7 @@ vertice *cria_vertice(char *nome) {
     return v;
 }
 
-vertice *obtem_vertice(char *nome, grafo *g) {
+static vertice *obtem_vertice(char *nome, grafo *g) {
     vertice *v_ant = NULL;
     vertice *v = g->lista_de_vertices;
     while (v != NULL) {
@@ -72,7 +72,7 @@ vertice *obtem_vertice(char *nome, grafo *g) {
     return v;
 }
 
-aresta *cria_aresta(vertice *dest, int peso) {
+static aresta *cria_aresta(vertice *dest, int peso) {
     aresta *a = (aresta *) malloc(sizeof(aresta));
     if (a == NULL)
         return NULL;
@@ -83,7 +83,7 @@ aresta *cria_aresta(vertice *dest, int peso) {
     return a;
 }
 
-int vertice_recebe_aresta(vertice *v, aresta *a) {
+static int vertice_recebe_aresta(vertice *v, aresta *a) {
     if (v == NULL)
         return 0;
     
@@ -102,7 +102,7 @@ int vertice_recebe_aresta(vertice *v, aresta *a) {
     return 0;
 }
 
-int adiciona_aresta(vertice *u, vertice *v, int peso) {
+static int adiciona_aresta(vertice *u, vertice *v, int peso) {
     if (u == NULL || v == NULL) 
         return 0;
 
@@ -115,7 +115,7 @@ int adiciona_aresta(vertice *u, vertice *v, int peso) {
     return 1;
 }
 
-void print_grafo(grafo *g) {
+static void print_grafo(grafo *g) {
     if (g == NULL)
         return;
 
@@ -133,10 +133,12 @@ void print_grafo(grafo *g) {
         printf("\n");
         v = v->prox;
     }
-    
 }
 
-grafo *le_grafo(FILE *f) {
+static grafo *cria_grafo(char *nome) {
+    if (nome == NULL)
+        return NULL;
+
     grafo *g = (grafo *) malloc(sizeof(grafo));
     if (g == NULL)
         return NULL;
@@ -144,27 +146,46 @@ grafo *le_grafo(FILE *f) {
     g->n_vertices = 0;
     g->n_arestas = 0;
 
-    char *g_nome = (char *) malloc(LINE_BUFFER_SIZE * sizeof(char));
-    fgets(g_nome, LINE_BUFFER_SIZE, f);
-    g_nome[strcspn(g_nome, "\n")] = 0;
-    g->nome = g_nome;
+    g->nome = (char *) malloc(LINE_BUFFER_SIZE * sizeof(char));
+    if (g->nome == NULL) {
+        return NULL;
+    }
+
+    memcpy(g->nome, nome, LINE_BUFFER_SIZE * sizeof(char));
+    g->nome[strcspn(g->nome, "\n")] = 0;
+    
+    return g;
+}
+
+grafo *le_grafo(FILE *f) {
+    grafo *g = NULL;
 
     char *buffer = (char *) malloc(LINE_BUFFER_SIZE * sizeof(char));
     while (fgets(buffer, LINE_BUFFER_SIZE, f)) {
-        char *save_ptr;
+        char *str_resto;
 
-        char *token = strtok_r(buffer, " ", &save_ptr);
+        char *token = strtok_r(buffer, " \t\n", &str_resto);
+        if (token == NULL || !strncmp(token, "//", 2))
+            continue;
         token[strcspn(token, "\n")] = 0;
+
+        if (g == NULL) {
+            g = cria_grafo(buffer);
+            if (g == NULL)
+                return NULL;
+            continue;
+        }
+
         vertice *u = obtem_vertice(token, g);
 
-        token = strtok_r(NULL, " ", &save_ptr);
+        token = strtok_r(NULL, " ", &str_resto);
         if (token != NULL && !strcmp(token, "--")) {
-            token = strtok_r(NULL, " ", &save_ptr);
+            token = strtok_r(NULL, " ", &str_resto);
             token[strcspn(token, "\n")] = 0;
             vertice *v = obtem_vertice(token, g);
 
             int peso;
-            token = strtok_r(NULL, " ", &save_ptr);
+            token = strtok_r(NULL, " ", &str_resto);
             if (token == NULL) {
                 peso = 1;
             } else {
@@ -172,26 +193,52 @@ grafo *le_grafo(FILE *f) {
                 if (!peso)
                     peso = 1;
             }
-
-            printf("adicionando aresta: (%s)----%d----(%s)\n", u->nome, peso, v->nome);
             
             adiciona_aresta(u, v, peso);
             g->n_arestas++;
         }
     }
-    
-    print_grafo(g);
-    exit(0);
 
+    free(buffer);
     return g;
 }
 
 unsigned int destroi_grafo(grafo *g) {
-    return 0;
+    if (g == NULL) 
+        return 0;
+
+    if (g->nome != NULL) {
+        free(g->nome);
+        g->nome = NULL;
+    }
+
+    vertice *v = g->lista_de_vertices;
+    vertice *v_aux = NULL;
+    while (v != NULL) {
+        v_aux = v->prox;
+
+        if (v->nome != NULL) {
+            free(v->nome);
+            v->nome = NULL;
+        }
+
+        aresta *a = v->fronteira;
+        aresta *a_aux = NULL;
+        while (a != NULL) {
+            a_aux = a->prox;
+            free(a);
+            a = a_aux;
+        }
+        
+        free(v);
+        v = v_aux;
+    }
+
+    return 1;
 }
 
 char *nome(grafo *g) {
-    return NULL;
+    return g->nome;
 }
 
 unsigned int bipartido(grafo *g) {
@@ -199,11 +246,11 @@ unsigned int bipartido(grafo *g) {
 }
 
 unsigned int n_vertices(grafo *g) {
-    return 0;
+    return g->n_vertices;
 }
 
 unsigned int n_arestas(grafo *g) {
-    return 0;
+    return g->n_arestas;
 }
 
 unsigned int n_componentes(grafo *g) {
