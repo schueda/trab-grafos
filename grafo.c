@@ -13,6 +13,9 @@ struct vertice {
 
     unsigned int estado;
     unsigned int componente;
+    unsigned int cor;
+    unsigned int nivel;
+    unsigned int low_point;
 
     aresta *fronteira;
     aresta *ultima_aresta;
@@ -37,18 +40,25 @@ struct grafo {
 
 static vertice *cria_vertice(char *nome) {
     vertice *v = (vertice *) malloc(sizeof(vertice));
-    if (v == NULL) 
+    if (v == NULL) {
+        perror("[cria_vertice] Não foi possível alocar vértice.\n");
         return NULL;
+    }
 
     char *v_nome = (char *) malloc(LINE_BUFFER_SIZE * sizeof(char));
-    if (v_nome == NULL)
+    if (v_nome == NULL) {
+        perror("[cria_vertice] Não foi possível allocar v_nome.\n");
         return NULL;
+    }
 
     memcpy(v_nome, nome, LINE_BUFFER_SIZE * sizeof(char));
     v->nome = v_nome;
 
     v->estado = 0;
     v->componente = 0;
+    v->cor = 0;
+    v->nivel = 0;
+    v->low_point = 0;
 
     v->fronteira = NULL;
     v->prox = NULL;
@@ -81,8 +91,10 @@ static vertice *obtem_vertice(char *nome, grafo *g) {
 
 static aresta *cria_aresta(vertice *dest, int peso) {
     aresta *a = (aresta *) malloc(sizeof(aresta));
-    if (a == NULL)
+    if (a == NULL) {
+        perror("[cria_aresta] Não foi possível alocar aresta.\n");
         return NULL;
+    }
 
     a->dest = dest;
     a->peso = peso;
@@ -91,8 +103,10 @@ static aresta *cria_aresta(vertice *dest, int peso) {
 }
 
 static int vertice_recebe_aresta(vertice *v, aresta *a) {
-    if (v == NULL)
+    if (v == NULL) {
+        perror("[vertice_recebe_aresta] Vértice nulo.\n");
         return 0;
+    }
     
     if (v->fronteira == NULL) {
         v->fronteira = a;
@@ -110,8 +124,10 @@ static int vertice_recebe_aresta(vertice *v, aresta *a) {
 }
 
 static int adiciona_aresta(vertice *u, vertice *v, int peso) {
-    if (u == NULL || v == NULL) 
+    if (u == NULL || v == NULL) {
+        perror("[adiciona_aresta] Vértice nulo.\n");
         return 0;
+    }
 
     aresta *a = cria_aresta(v, peso);
     vertice_recebe_aresta(u, a);
@@ -123,8 +139,10 @@ static int adiciona_aresta(vertice *u, vertice *v, int peso) {
 }
 
 static void print_grafo(grafo *g) {
-    if (g == NULL)
+    if (g == NULL) {
+        perror("[print_grafo] Grafo nulo.\n");
         return;
+    }
 
     printf("nome: %s\n", g->nome);
     vertice *v = g->lista_de_vertices;
@@ -143,12 +161,16 @@ static void print_grafo(grafo *g) {
 }
 
 static grafo *cria_grafo(char *nome) {
-    if (nome == NULL)
+    if (nome == NULL) {
+        perror("[cria_grafo] nome nulo.\n");
         return NULL;
+    }
 
     grafo *g = (grafo *) malloc(sizeof(grafo));
-    if (g == NULL)
+    if (g == NULL) {
+        perror("[cria_grafo] Não foi possível alocar grafo.\n");
         return NULL;
+    }
 
     g->n_vertices = 0;
     g->n_arestas = 0;
@@ -178,8 +200,10 @@ grafo *le_grafo(FILE *f) {
 
         if (g == NULL) {
             g = cria_grafo(buffer);
-            if (g == NULL)
+            if (g == NULL) {
+                perror("[le_grafo] Não foi possível criar o grafo.\n");
                 return NULL;
+            }
             continue;
         }
 
@@ -211,8 +235,10 @@ grafo *le_grafo(FILE *f) {
 }
 
 unsigned int destroi_grafo(grafo *g) {
-    if (g == NULL) 
+    if (g == NULL) {
+        perror("[destroi_grafo] Grafo nulo.\n");
         return 0;
+    }
 
     if (g->nome != NULL) {
         free(g->nome);
@@ -245,18 +271,98 @@ unsigned int destroi_grafo(grafo *g) {
 }
 
 char *nome(grafo *g) {
+    if (g == NULL) {
+        perror("[nome] Grafo nulo.\n");
+        return NULL;
+    }
+
     return g->nome;
 }
 
+static unsigned int comp_bipartido(grafo *g, vertice *r) {
+    r->estado = 1;
+
+    vertice **V = (vertice **) malloc(g->n_vertices * sizeof(vertice *));
+    if (V == NULL) {
+        perror("[comp_bipartido] Não foi possível alocar V.\n");
+        return 0;
+    }
+
+    int começo_V = 0;
+    int final_V = 0;
+    V[final_V++] = r;
+
+    while (começo_V < final_V) {
+        vertice *v = V[começo_V++];
+
+        aresta *a = v->fronteira;
+        while (a != NULL) {
+            vertice *w = a->dest;
+            if (w == NULL) {
+                perror("[comp_bipartido] Aresta apontando para nulo.\n");
+                return 0;
+            }
+
+            if (w->estado == 0) {
+                w->cor = v->cor == 1 ? 0 : 1;
+                w->estado = 1;
+                V[final_V++] = w;
+            } else if (w->cor == v->cor) {
+                free(V);
+                return 0;
+            }
+            a = a->prox;
+        }
+        v->estado = 2;
+    }
+    
+    free(V);
+    return 1;
+}
+
 unsigned int bipartido(grafo *g) {
-    return 0;
+    if (g == NULL) {
+        perror("[bipartido] Grafo nulo.\n");
+        return 0;
+    }
+
+    vertice *v = g->lista_de_vertices;
+    while (v != NULL) {
+        v->estado = 0;
+        v->cor = 0;
+
+        v = v->prox;
+    }
+
+    v = g->lista_de_vertices;
+    while (v != NULL) {
+        if (v->estado == 0) {
+            if (!comp_bipartido(g, v)) {
+                return 0;
+            }
+        }
+
+        v = v->prox;
+    }
+
+    return 1;
 }
 
 unsigned int n_vertices(grafo *g) {
+    if (g == NULL) {
+        perror("[n_vertices] Grafo nulo.\n");
+        return 0;
+    }
+
     return g->n_vertices;
 }
 
 unsigned int n_arestas(grafo *g) {
+    if (g == NULL) {
+        perror("[n_arestas] Grafo nulo.\n");
+        return 0;
+    }
+
     return g->n_arestas;
 }
 
@@ -264,8 +370,10 @@ static int componentes(grafo *g, vertice *r) {
     r->estado = 1;
 
     vertice **V = (vertice **) malloc(g->n_vertices * sizeof(vertice *));
-    if (V == NULL)
+    if (V == NULL) {
+        perror("[componentes] Não foi possível alocar V.\n");
         return 0;
+    }
     
     int começo_V = 0;
     int final_V = 0;
@@ -276,8 +384,10 @@ static int componentes(grafo *g, vertice *r) {
         aresta *a = v->fronteira;
         while (a != NULL) {
             vertice *w = a->dest;
-            if (w == NULL)
+            if (w == NULL) {
+                perror("[componentes] Aresta apontando para nulo.\n");
                 return 0;
+            }
 
             if (w->estado == 0) {
                 w->componente = v->componente;
@@ -294,11 +404,21 @@ static int componentes(grafo *g, vertice *r) {
 }
 
 unsigned int n_componentes(grafo *g) {
-    if (g == NULL)
+    if (g == NULL) {
+        perror("[n_componentes] Grafo nulo.\n");
         return 0;
+    }
+
+    vertice *v = g->lista_de_vertices;
+    while (v != NULL) {
+        v->estado = 0;
+        v->componente = 0;
+
+        v = v->prox;
+    }    
 
     unsigned int c = 0;
-    vertice *v = g->lista_de_vertices;
+    v = g->lista_de_vertices;
     while (v != NULL) {
         if (v->estado == 0) {
             v->componente = ++c;
