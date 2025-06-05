@@ -10,6 +10,10 @@ typedef struct aresta aresta;
 
 struct vertice {
     char *nome;
+
+    unsigned int estado;
+    unsigned int componente;
+
     aresta *fronteira;
     aresta *ultima_aresta;
 
@@ -42,6 +46,9 @@ static vertice *cria_vertice(char *nome) {
 
     memcpy(v_nome, nome, LINE_BUFFER_SIZE * sizeof(char));
     v->nome = v_nome;
+
+    v->estado = 0;
+    v->componente = 0;
 
     v->fronteira = NULL;
     v->prox = NULL;
@@ -253,8 +260,54 @@ unsigned int n_arestas(grafo *g) {
     return g->n_arestas;
 }
 
+static int componentes(grafo *g, vertice *r) {
+    r->estado = 1;
+
+    vertice **V = (vertice **) malloc(g->n_vertices * sizeof(vertice *));
+    if (V == NULL)
+        return 0;
+    
+    int começo_V = 0;
+    int final_V = 0;
+    V[final_V++] = r;
+    while (começo_V < final_V) {
+        vertice *v = V[começo_V++];
+
+        aresta *a = v->fronteira;
+        while (a != NULL) {
+            vertice *w = a->dest;
+            if (w == NULL)
+                return 0;
+
+            if (w->estado == 0) {
+                w->componente = v->componente;
+                w->estado = 1;
+                V[final_V++] = w;
+            }
+            a = a->prox;
+        }
+        
+        v->estado = 2;
+    }
+
+    return 1;
+}
+
 unsigned int n_componentes(grafo *g) {
-    return 0;
+    if (g == NULL)
+        return 0;
+
+    unsigned int c = 0;
+    vertice *v = g->lista_de_vertices;
+    while (v != NULL) {
+        if (v->estado == 0) {
+            v->componente = ++c;
+            componentes(g, v);
+        }
+
+        v = v->prox;
+    }
+    return c;
 }
 
 char *diametros(grafo *g) {
