@@ -1,0 +1,14 @@
+MOTHERRUSSIA
+a -- b 4
+a -- h 8
+b -- h 11
+b -- c 8
+c -- i 2
+i -- h 7
+i -- g 6
+h -- g 1
+c -- d 7
+g -- f 2
+d -- f 14
+d -- e 9
+e -- f 10

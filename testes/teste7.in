@@ -1,0 +1,14 @@
+corte
+a -- c
+a -- f
+c -- g
+f -- g
+g -- e
+e -- b
+e -- h
+e -- j
+b -- h
+h -- j
+h -- i
+h -- d
+d -- i
