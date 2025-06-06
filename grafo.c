@@ -16,6 +16,7 @@ struct vertice {
     unsigned int cor;
     unsigned int nivel;
     unsigned int low_point;
+    unsigned int dist;
 
     aresta *fronteira;
     aresta *ultima_aresta;
@@ -48,6 +49,8 @@ static vertice *cria_vertice(char *nome) {
     char *v_nome = (char *) malloc(LINE_BUFFER_SIZE * sizeof(char));
     if (v_nome == NULL) {
         perror("[cria_vertice] Não foi possível allocar v_nome.\n");
+
+        free(v);
         return NULL;
     }
 
@@ -59,6 +62,7 @@ static vertice *cria_vertice(char *nome) {
     v->cor = 0;
     v->nivel = 0;
     v->low_point = 0;
+    v->dist = 0;
 
     v->fronteira = NULL;
     v->prox = NULL;
@@ -172,16 +176,18 @@ static grafo *cria_grafo(char *nome) {
         return NULL;
     }
 
-    g->n_vertices = 0;
-    g->n_arestas = 0;
-
     g->nome = (char *) malloc(LINE_BUFFER_SIZE * sizeof(char));
     if (g->nome == NULL) {
+        perror("[cria_grafo] Não foi possível alocar nome do grafo.\n");
+        free(g);
         return NULL;
     }
 
     memcpy(g->nome, nome, LINE_BUFFER_SIZE * sizeof(char));
     g->nome[strcspn(g->nome, "\n")] = 0;
+
+    g->n_vertices = 0;
+    g->n_arestas = 0;
     
     return g;
 }
@@ -428,6 +434,139 @@ unsigned int n_componentes(grafo *g) {
         v = v->prox;
     }
     return c;
+}
+
+typedef struct fila_p fila_p;
+struct fila_p {
+    vertice **vertices;
+    int tam;
+    int tam_max;
+};
+
+fila_p *cria_fila_p(int tam) {
+    fila_p *fila = (fila_p *) malloc(sizeof(fila_p));
+    if (fila == NULL) {
+        perror("[cria_fila_p] Não foi possível alocar fila de prioridade.\n");
+        return NULL;
+    }
+
+    fila->vertices = (vertice **) malloc(tam * sizeof(vertice *));
+    if (fila->vertices == NULL) {
+        perror("[cria_fila_p] Não foi possível alocar lista de vértices da fila de prioridade.\n");
+        free(fila);
+    }
+
+    fila->tam = 0;
+    fila->tam_max = tam;
+    
+    return fila;
+}
+
+int destroi_fila_p(fila_p *fila) {
+    if (fila == NULL) {
+        perror("[destroi_fila_p] Fila nula.\n");
+        return 0;
+    }
+
+    if (fila->vertices != NULL) {
+        free(fila->vertices);
+    }
+
+    free(fila);
+}
+
+static int pai(int i) {
+    return (i - 1) / 2;
+}
+
+static int filho_esq(int i) {
+    return (2 * i) + 1;
+}
+
+static int filho_dir(int i) {
+    return (2 * i) + 2;
+}
+
+static void swap(vertice **u, vertice **v) {
+    vertice *v_aux = *u;
+    *u = *v;
+    *v = v_aux;
+}
+
+static void shift_up(fila_p *fila, int i) {
+    while (i > 0 && fila->vertices[pai(i)]->dist > fila->vertices[i]->dist) {
+        swap(&fila->vertices[pai(i)], &fila->vertices[i]);
+        i = pai(i);
+    }
+}
+
+static void shift_down(fila_p *fila, int i) {
+    int i_min = i;
+
+    int e = filho_esq(i);
+    if (e < fila->tam && fila->vertices[e]->dist < fila->vertices[i_min]->dist) {
+        i_min = e;
+    }
+
+    int d = filho_dir(i);
+    if (d < fila->tam && fila->vertices[d]->dist < fila->vertices[i_min]->dist) {
+        i_min = d;
+    }
+
+    if (i != i_min) {
+        swap(&fila->vertices[i], &fila->vertices[i_min]);
+        shift_down(fila, i_min);
+    }
+}
+
+static unsigned int fila_insere_vertice(fila_p *fila, vertice *v) {
+    if (fila == NULL || v == NULL) {
+        perror("[fila_insere_vertice] Função recebeu argumento nulo.\n");
+        return 0;
+    }
+
+    if (fila->tam >= fila->tam_max) {
+        perror("[fila_insere_vertice] Fila cheia.\n");
+        return 0;
+    }
+
+    fila->vertices[fila->tam++] = v;
+    shift_up(fila, fila->tam - 1);
+
+    return 1;
+}
+
+static vertice *fila_obtem_vertice(fila_p *fila) {
+    if (fila == NULL || fila->vertices == NULL) {
+        perror("[fila_obtem_vertice] Função recebeu argumento nulo.\n");
+        return NULL;
+    }
+
+    if (fila->tam == 0) {
+        perror("[fila_obtem_vertice] Fila vazia.\n");
+        return NULL;
+    }
+
+    vertice *v = fila->vertices[0];
+    fila->vertices[0] = fila->vertices[--fila->tam];
+    shift_down(fila, 0);
+
+    return v;
+}
+
+static unsigned int dijsktra(grafo *g, vertice *r) {
+    if (g == NULL || r == NULL) {
+        perror("[dijsktra] Valor nulo passado como parâmetro.\n");
+        return 0;
+    }
+
+    vertice *v = g->lista_de_vertices;
+    while (v != NULL) {
+        v->dist = UINT32_MAX;
+        v = v->prox;
+    }
+
+
 }
 
 char *diametros(grafo *g) {
