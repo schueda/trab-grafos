@@ -48,15 +48,15 @@ static vertice *cria_vertice(char *nome) {
         return NULL;
     }
 
-    char *v_nome = (char *)malloc(TAMANHO_BUFFER_LINHA * sizeof(char));
+    size_t nome_len = strlen(nome) + 1;
+    char *v_nome = (char *)malloc(nome_len * sizeof(char));
     if (v_nome == NULL) {
         perror("[cria_vertice] Não foi possível allocar v_nome.\n");
-
         free(v);
         return NULL;
     }
 
-    memcpy(v_nome, nome, TAMANHO_BUFFER_LINHA * sizeof(char));
+    strcpy(v_nome, nome);
     v->nome = v_nome;
 
     v->estado = 0;
@@ -107,6 +107,7 @@ static aresta *cria_aresta(vertice *dest, unsigned int peso) {
 
     a->dest = dest;
     a->peso = peso;
+    a->prox = NULL;
 
     return a;
 }
@@ -168,6 +169,8 @@ static grafo *cria_grafo(char *nome) {
 
     memcpy(g->nome, nome, TAMANHO_BUFFER_LINHA * sizeof(char));
     g->nome[strcspn(g->nome, "\n")] = 0;
+
+    g->lista_de_vertices = NULL;
 
     g->n_vertices = 0;
     g->n_arestas = 0;
@@ -254,6 +257,8 @@ unsigned int destroi_grafo(grafo *g) {
         v = v_aux;
     }
 
+    free(g);
+
     return 1;
 }
 
@@ -274,6 +279,9 @@ static unsigned int comp_bipartido(grafo *g, vertice *r) {
         perror("[comp_bipartido] Não foi possível alocar V.\n");
         return 0;
     }
+
+    for (unsigned int i = 0; i < g->n_vertices; i++)
+        V[i] = NULL;
 
     int começo_V = 0;
     int final_V = 0;
@@ -362,6 +370,9 @@ static int componentes(grafo *g, vertice *r) {
         return 0;
     }
 
+    for (unsigned int i = 0; i < g->n_vertices; i++)
+        V[i] = NULL;
+
     int começo_V = 0;
     int final_V = 0;
     V[final_V++] = r;
@@ -387,6 +398,7 @@ static int componentes(grafo *g, vertice *r) {
         v->estado = 2;
     }
 
+    free(V);
     return 1;
 }
 
@@ -643,6 +655,7 @@ char *diametros(grafo *g) {
     }
     s[strlen(s) - 1] = '\0';
 
+    free(diams);
     return s;
 }
 
@@ -737,24 +750,41 @@ char *vertices_corte(grafo *g) {
         v = v->prox;
     }
 
+    if (tam_cortes == 0) {
+        free(cortes);
+        char *vazio = (char *)malloc(sizeof(char));
+        if (vazio == NULL) {
+            perror("[vertices_corte] Não foi possível alocar string vazia.\n");
+            return NULL;
+        }
+        vazio[0] = '\0';
+        return vazio;
+    }
+
     qsort(cortes, tam_cortes, sizeof(char *), compara_strings);
 
     unsigned int tamanho_buffer = tam_cortes * TAMANHO_BUFFER_LINHA;
     char *cortes_str = (char *)malloc(tamanho_buffer * sizeof(char));
+    if (cortes_str == NULL) {
+        perror("[vertices_corte] Não foi possível alocar cortes_str.\n");
+        free(cortes);
+        return NULL;
+    }
     cortes_str[0] = '\0';
 
     for (unsigned int i = 0; i < tam_cortes; i++) {
         unsigned int len = (unsigned int)strlen(cortes[i]);
         if (len >= TAMANHO_BUFFER_LINHA - 2) {
             perror("[vertices_corte] Buffer da string cheio.\n");
+            free(cortes_str);
+            free(cortes);
             return NULL;
         }
-        cortes[i][len] = ' ';
-        cortes[i][len + 1] = '\0';
         strncat(cortes_str, cortes[i], tamanho_buffer);
-        cortes[i][len] = '\0';
+        if (i < tam_cortes - 1) {
+            strncat(cortes_str, " ", tamanho_buffer);
+        }
     }
-    cortes_str[strlen(cortes_str) - 1] = '\0';
 
     free(cortes);
     return cortes_str;
@@ -843,24 +873,42 @@ char *arestas_corte(grafo *g) {
         v = v->prox;
     }
 
+    if (tam_cortes == 0) {
+        free(cortes);
+        char *vazio = (char *)malloc(1);
+        if (vazio == NULL) {
+            perror("[arestas_corte] Não foi possível alocar string vazia.\n");
+            return NULL;
+        }
+        vazio[0] = '\0';
+        return vazio;
+    }
+
     qsort(cortes, tam_cortes, sizeof(char *), compara_strings);
 
     unsigned int tamanho_buffer = tam_cortes * TAMANHO_BUFFER_LINHA;
     char *cortes_str = (char *)malloc(tamanho_buffer * sizeof(char));
+    if (cortes_str == NULL) {
+        perror("[arestas_corte] Não foi possível alocar cortes_str.\n");
+        free(cortes);
+        return NULL;
+    }
     cortes_str[0] = '\0';
 
     for (unsigned int i = 0; i < tam_cortes; i++) {
         unsigned int len = (unsigned int)strlen(cortes[i]);
         if (len >= (2 * TAMANHO_BUFFER_LINHA) - 2) {
             perror("[arestas_corte] Buffer da string cheio.\n");
+            free(cortes_str);
+            free(cortes);
             return NULL;
         }
-        cortes[i][len] = ' ';
-        cortes[i][len + 1] = '\0';
         strncat(cortes_str, cortes[i], tamanho_buffer);
+        if (i < tam_cortes - 1) {
+            strncat(cortes_str, " ", tamanho_buffer);
+        }
         free(cortes[i]);
     }
-    cortes_str[strlen(cortes_str) - 1] = '\0';
 
     free(cortes);
     return cortes_str;
