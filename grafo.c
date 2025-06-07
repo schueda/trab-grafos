@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define LINE_BUFFER_SIZE 2048
+#define TAMANHO_BUFFER_LINHA 2048
 
 typedef struct vertice vertice;
 typedef struct aresta aresta;
@@ -23,6 +23,8 @@ struct vertice {
     aresta *fronteira;
     aresta *ultima_aresta;
 
+    vertice *pai;
+    
     vertice *prox;
 };
 
@@ -48,7 +50,7 @@ static vertice *cria_vertice(char *nome) {
         return NULL;
     }
 
-    char *v_nome = (char *)malloc(LINE_BUFFER_SIZE * sizeof(char));
+    char *v_nome = (char *)malloc(TAMANHO_BUFFER_LINHA * sizeof(char));
     if (v_nome == NULL) {
         perror("[cria_vertice] Não foi possível allocar v_nome.\n");
 
@@ -56,7 +58,7 @@ static vertice *cria_vertice(char *nome) {
         return NULL;
     }
 
-    memcpy(v_nome, nome, LINE_BUFFER_SIZE * sizeof(char));
+    memcpy(v_nome, nome, TAMANHO_BUFFER_LINHA * sizeof(char));
     v->nome = v_nome;
 
     v->estado = 0;
@@ -67,6 +69,9 @@ static vertice *cria_vertice(char *nome) {
     v->dist = 0;
 
     v->fronteira = NULL;
+    v->ultima_aresta = NULL;
+
+    v->pai = NULL;
     v->prox = NULL;
 
     return v;
@@ -178,14 +183,14 @@ static grafo *cria_grafo(char *nome) {
         return NULL;
     }
 
-    g->nome = (char *)malloc(LINE_BUFFER_SIZE * sizeof(char));
+    g->nome = (char *)malloc(TAMANHO_BUFFER_LINHA * sizeof(char));
     if (g->nome == NULL) {
         perror("[cria_grafo] Não foi possível alocar nome do grafo.\n");
         free(g);
         return NULL;
     }
 
-    memcpy(g->nome, nome, LINE_BUFFER_SIZE * sizeof(char));
+    memcpy(g->nome, nome, TAMANHO_BUFFER_LINHA * sizeof(char));
     g->nome[strcspn(g->nome, "\n")] = 0;
 
     g->n_vertices = 0;
@@ -197,8 +202,8 @@ static grafo *cria_grafo(char *nome) {
 grafo *le_grafo(FILE *f) {
     grafo *g = NULL;
 
-    char *buffer = (char *)malloc(LINE_BUFFER_SIZE * sizeof(char));
-    while (fgets(buffer, LINE_BUFFER_SIZE, f)) {
+    char *buffer = (char *)malloc(TAMANHO_BUFFER_LINHA * sizeof(char));
+    while (fgets(buffer, TAMANHO_BUFFER_LINHA, f)) {
         char *str_resto;
 
         char *token = strtok_r(buffer, " \t\n", &str_resto);
@@ -640,7 +645,7 @@ static unsigned int dijkstra(grafo *g, vertice *r) {
     return max;
 }
 
-static int compare_ints(const void *a, const void *b) {
+static int compara_ints(const void *a, const void *b) {
     const int *ia = (const int *)a;
     const int *ib = (const int *)b;
 
@@ -673,23 +678,127 @@ char *diametros(grafo *g) {
         v = v->prox;
     }
 
-    qsort(diams, c, sizeof(int), compare_ints);
+    qsort(diams, c, sizeof(int), compara_ints);
 
-    unsigned int buffer_size = (10 * c) + 1;
-    char *s = (char *)malloc(buffer_size * sizeof(char));
+    unsigned int tamanho_buffer = (10 * c) + 1;
+    char *s = (char *)malloc(tamanho_buffer * sizeof(char));
 
     for (int i = 0; i < (int)c; i++) {
-        char number[10] = "";
-        sprintf(number, "%d ", diams[i]);
-        strncat(s, number, buffer_size);
+        char numero[10] = "";
+        sprintf(numero, "%d ", diams[i]);
+        strncat(s, numero, tamanho_buffer);
     }
     s[strlen(s) - 1] = '\0';
 
     return s;
 }
 
+static unsigned int v_corte(grafo *g, vertice *r, char **cortes, unsigned int *tam_cortes) {
+    r->estado = 1;
+    aresta *a = r->fronteira;
+    while (a != NULL) {
+        vertice *w = a->dest;
+        if (w == NULL) {
+            perror("[v_corte] Aresta apontando para nulo.\n");
+            return 0;
+        }
+
+        if (w->estado == 1 && w->nivel < r->low_point && w != r->pai) {
+            r->low_point = w->nivel;
+        } else if (w->estado == 0) {
+            w->pai = r;
+            w->nivel = r->nivel + 1;
+            w->low_point = w->nivel;
+            v_corte(g, w, cortes, tam_cortes);
+            if (w->low_point < r->low_point) {
+                r->low_point = w->low_point;
+            }
+        }
+
+        a = a->prox;
+    }
+    r->estado = 2;
+
+    a = r->fronteira;
+    int n_de_filhos = 0;
+    while (a != NULL) {
+        vertice *w = a->dest;
+        if (w == NULL) {
+            perror("[v_corte] Aresta apontando para nulo.\n");
+            return 0;
+        }
+
+        if (w->pai == r) {
+            n_de_filhos++;
+            if (r->pai == NULL) {
+                if (n_de_filhos >= 2) {
+                    cortes[(*tam_cortes)++] = r->nome;
+                }
+            } else {
+                if (r->nivel <= w->low_point) {
+                    cortes[(*tam_cortes)++] = r->nome;
+                }
+            }
+        }
+
+        a = a->prox;
+    }
+    return 0;
+}
+
+static int compara_strings(const void *str1, const void *str2) {
+    char *const *pp1 = str1;
+    char *const *pp2 = str2;
+    return strcmp(*pp1, *pp2);
+}
+
 char *vertices_corte(grafo *g) {
-    return NULL;
+    if (g == NULL) {
+        perror("[vertices_corte] Grafo nulo.\n");
+        return NULL;
+    }
+
+    vertice *v = g->lista_de_vertices;
+    while (v != NULL) {
+        v->estado = 0;
+        v->pai = NULL;
+
+        v = v->prox;
+    }
+
+    unsigned int tam_cortes = 0;
+    char **cortes = (char **)malloc(g->n_vertices * sizeof(char *));
+    if (cortes == NULL) {
+        perror("[vertices_corte] Não foi possível alocar cortes.\n");
+        return NULL;
+    }
+
+    v = g->lista_de_vertices;
+    while (v != NULL) {
+        if (v->estado == 0) {
+            v->low_point = 0;
+            v->nivel = 0;
+            v_corte(g, v, cortes, &tam_cortes);
+        }
+
+        v = v->prox;
+    }
+    
+    qsort(cortes, tam_cortes, sizeof(char *), compara_strings);
+     
+    unsigned int tamanho_buffer = tam_cortes * TAMANHO_BUFFER_LINHA;
+    char *cortes_str = (char *)malloc(tamanho_buffer * sizeof(char));
+
+    for (unsigned int i = 0; i < tam_cortes; i++) {
+        char *nome = (char *)malloc(TAMANHO_BUFFER_LINHA * sizeof(char));
+        sprintf(nome, "%s ", cortes[i]);
+        strncat(cortes_str, nome, tamanho_buffer);
+    }
+    cortes_str[strlen(cortes_str) - 1] = '\0';
+
+    free(cortes);
+
+    return cortes_str;
 }
 
 char *arestas_corte(grafo *g) {
