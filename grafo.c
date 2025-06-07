@@ -18,13 +18,11 @@ struct vertice {
     unsigned int low_point;
     unsigned int dist;
 
-    unsigned int fila_pos;
-
     aresta *fronteira;
     aresta *ultima_aresta;
 
     vertice *pai;
-    
+
     vertice *prox;
 };
 
@@ -182,9 +180,7 @@ grafo *le_grafo(FILE *f) {
 
     char *buffer = (char *)malloc(TAMANHO_BUFFER_LINHA * sizeof(char));
     while (fgets(buffer, TAMANHO_BUFFER_LINHA, f)) {
-        char *str_resto;
-
-        char *token = strtok_r(buffer, " \t\n", &str_resto);
+        char *token = strtok(buffer, " \t\n");
         if (token == NULL || !strncmp(token, "//", 2))
             continue;
         token[strcspn(token, "\n")] = 0;
@@ -200,14 +196,14 @@ grafo *le_grafo(FILE *f) {
 
         vertice *u = obtem_vertice(token, g);
 
-        token = strtok_r(NULL, " ", &str_resto);
+        token = strtok(NULL, " ");
         if (token != NULL && !strcmp(token, "--")) {
-            token = strtok_r(NULL, " ", &str_resto);
+            token = strtok(NULL, " ");
             token[strcspn(token, "\n")] = 0;
             vertice *v = obtem_vertice(token, g);
 
             unsigned int peso;
-            token = strtok_r(NULL, " ", &str_resto);
+            token = strtok(NULL, " ");
             if (token == NULL) {
                 peso = 1;
             } else {
@@ -481,8 +477,6 @@ static void troca(vertice **u, vertice **v) {
 
 static void sobe(fila_p *fila, unsigned int i) {
     while (i > 0 && fila->vertices[pai(i)]->dist > fila->vertices[i]->dist) {
-        fila->vertices[i]->fila_pos = pai(i);
-        fila->vertices[pai(i)]->fila_pos = i;
         troca(&fila->vertices[pai(i)], &fila->vertices[i]);
         i = pai(i);
     }
@@ -502,8 +496,6 @@ static void desce(fila_p *fila, unsigned int i) {
     }
 
     if (i != i_min) {
-        fila->vertices[i]->fila_pos = i_min;
-        fila->vertices[i_min]->fila_pos = i;
         troca(&fila->vertices[i], &fila->vertices[i_min]);
         desce(fila, i_min);
     }
@@ -521,7 +513,6 @@ static unsigned int fila_insere_vertice(fila_p *fila, vertice *v) {
     }
 
     fila->vertices[fila->tam++] = v;
-    v->fila_pos = fila->tam - 1;
     sobe(fila, fila->tam - 1);
 
     return 1;
@@ -540,7 +531,6 @@ static vertice *fila_obtem_vertice(fila_p *fila) {
 
     vertice *v = fila->vertices[0];
     fila->vertices[0] = fila->vertices[--fila->tam];
-    fila->vertices[0]->fila_pos = 0;
     desce(fila, 0);
 
     return v;
@@ -554,47 +544,43 @@ static unsigned int dijkstra(grafo *g, vertice *r) {
 
     vertice *v = g->lista_de_vertices;
     while (v != NULL) {
-        v->dist = UINT32_MAX;
+        v->estado = 0;
         v = v->prox;
     }
 
     fila_p *V = cria_fila_p(g->n_vertices);
     r->dist = 0;
-
-    v = g->lista_de_vertices;
-    while (v != NULL) {
-        fila_insere_vertice(V, v);
-        v = v->prox;
-    }
+    r->estado = 1;
+    fila_insere_vertice(V, r);
 
     while (V->tam != 0) {
         v = fila_obtem_vertice(V);
-        v->fila_pos = V->tam_max;
         if (v == NULL) {
             perror("[dijkstra] Não foi possível obter vértice.\n");
             return 0;
         }
 
-        if (v->componente == r->componente) {
-            aresta *a = v->fronteira;
-            while (a != NULL) {
-                vertice *u = a->dest;
-                if (u == NULL) {
-                    perror("[dijkstra] Aresta apontando para nulo.\n");
-                    return 0;
-                }
-                u->componente = r->componente;
+        aresta *a = v->fronteira;
+        while (a != NULL) {
+            vertice *u = a->dest;
+            if (u == NULL) {
+                perror("[dijkstra] Aresta apontando para nulo.\n");
+                return 0;
+            }
+            u->componente = r->componente;
 
+            if (u->estado == 1) {
                 if (v->dist + a->peso < u->dist) {
                     u->dist = v->dist + a->peso;
-                    if (u->fila_pos < V->tam_max) {
-                        sobe(V, u->fila_pos);
-                    }
                 }
-
-                a = a->prox;
+            } else if (u->estado == 0) {
+                u->dist = v->dist + a->peso;
+                u->estado = 1;
+                fila_insere_vertice(V, u);
             }
+            a = a->prox;
         }
+        v->estado = 2;
     }
 
     destroi_fila_p(V);
@@ -631,7 +617,7 @@ char *diametros(grafo *g) {
     }
 
     unsigned int c = 0;
-    unsigned int *diams = (unsigned int *)malloc(g->n_vertices * sizeof(unsigned int));
+    unsigned int *diams = (unsigned int *)calloc(g->n_vertices, sizeof(unsigned int));
 
     v = g->lista_de_vertices;
     while (v != NULL) {
@@ -652,7 +638,7 @@ char *diametros(grafo *g) {
 
     for (int i = 0; i < (int)c; i++) {
         char numero[10] = "";
-        sprintf(numero, "%d ", diams[i]);
+        sprintf(numero, "%u ", diams[i]);
         strncat(s, numero, tamanho_buffer);
     }
     s[strlen(s) - 1] = '\0';
@@ -750,9 +736,9 @@ char *vertices_corte(grafo *g) {
 
         v = v->prox;
     }
-    
+
     qsort(cortes, tam_cortes, sizeof(char *), compara_strings);
-     
+
     unsigned int tamanho_buffer = tam_cortes * TAMANHO_BUFFER_LINHA;
     char *cortes_str = (char *)malloc(tamanho_buffer * sizeof(char));
     cortes_str[0] = '\0';
@@ -764,7 +750,7 @@ char *vertices_corte(grafo *g) {
             return NULL;
         }
         cortes[i][len] = ' ';
-        cortes[i][len+1] = '\0';
+        cortes[i][len + 1] = '\0';
         strncat(cortes_str, cortes[i], tamanho_buffer);
         cortes[i][len] = '\0';
     }
@@ -818,7 +804,7 @@ static unsigned int a_corte(grafo *g, vertice *r, char **cortes, unsigned int *t
             }
             cortes[(*tam_cortes)++] = a_str;
         }
-    
+
         a = a->prox;
     }
 
@@ -856,9 +842,9 @@ char *arestas_corte(grafo *g) {
 
         v = v->prox;
     }
-    
+
     qsort(cortes, tam_cortes, sizeof(char *), compara_strings);
-     
+
     unsigned int tamanho_buffer = tam_cortes * TAMANHO_BUFFER_LINHA;
     char *cortes_str = (char *)malloc(tamanho_buffer * sizeof(char));
     cortes_str[0] = '\0';
