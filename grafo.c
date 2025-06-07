@@ -215,8 +215,10 @@ grafo *le_grafo(FILE *f) {
                     peso = 1;
             }
 
-            adiciona_aresta(u, v, peso);
-            g->n_arestas++;
+            if (u != v) {
+                adiciona_aresta(u, v, peso);
+                g->n_arestas++;
+            }
         }
     }
 
