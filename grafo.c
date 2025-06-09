@@ -701,10 +701,12 @@ static unsigned int v_corte(grafo *g, vertice *r, char **cortes, unsigned int *t
             if (r->pai == NULL) {
                 if (n_de_filhos >= 2) {
                     cortes[(*tam_cortes)++] = r->nome;
+                    break;
                 }
             } else {
                 if (r->nivel <= w->low_point) {
                     cortes[(*tam_cortes)++] = r->nome;
+                    break;
                 }
             }
         }
