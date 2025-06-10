@@ -18,6 +18,8 @@ struct vertice {
     unsigned int low_point;
     unsigned int dist;
 
+    unsigned int fila_pos;
+
     aresta *fronteira;
     aresta *ultima_aresta;
 
@@ -491,6 +493,8 @@ static void troca(vertice **u, vertice **v) {
 
 static void sobe(fila_p *fila, unsigned int i) {
     while (i > 0 && fila->vertices[pai(i)]->dist > fila->vertices[i]->dist) {
+        fila->vertices[i]->fila_pos = pai(i);
+        fila->vertices[pai(i)]->fila_pos = i;
         troca(&fila->vertices[pai(i)], &fila->vertices[i]);
         i = pai(i);
     }
@@ -510,6 +514,8 @@ static void desce(fila_p *fila, unsigned int i) {
     }
 
     if (i != i_min) {
+        fila->vertices[i]->fila_pos = i_min;
+        fila->vertices[i_min]->fila_pos = i;
         troca(&fila->vertices[i], &fila->vertices[i_min]);
         desce(fila, i_min);
     }
@@ -526,6 +532,7 @@ static unsigned int fila_insere_vertice(fila_p *fila, vertice *v) {
         return 0;
     }
 
+    v->fila_pos = fila->tam;
     fila->vertices[fila->tam++] = v;
     sobe(fila, fila->tam - 1);
 
@@ -545,6 +552,7 @@ static vertice *fila_obtem_vertice(fila_p *fila) {
 
     vertice *v = fila->vertices[0];
     fila->vertices[0] = fila->vertices[--fila->tam];
+    fila->vertices[0]->fila_pos = 0;
     desce(fila, 0);
 
     return v;
@@ -586,6 +594,7 @@ static unsigned int dijkstra(grafo *g, vertice *r) {
             if (u->estado == 1) {
                 if (v->dist + a->peso < u->dist) {
                     u->dist = v->dist + a->peso;
+                    sobe(V, u->fila_pos);
                 }
             } else if (u->estado == 0) {
                 u->dist = v->dist + a->peso;

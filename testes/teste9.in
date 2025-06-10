@@ -1,0 +1,6 @@
+quebra-Dijkstra
+a -- b 6
+a -- c 2
+a -- d 5
+b -- c 1
+b -- d 1
